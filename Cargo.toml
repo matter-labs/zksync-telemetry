@@ -1,0 +1,18 @@
+[package]
+name = "zksync-telemetry"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.94"
+chrono = { version = "0.4.38", features = ["serde"] }
+directories = "5.0.1"
+posthog-rs = "0.2.2"
+sentry = {version = "0.35.0", features = ["test"]}
+serde = { version = "1.0.215", features = ["derive"] }
+serde_json = "1.0.133"
+thiserror = "2.0.4"
+uuid = { version = "1.11.0", features = ["v4", "serde"] }
+
+[dev-dependencies]
+tempfile = "3.14.0"
