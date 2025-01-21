@@ -175,15 +175,15 @@ fn main() {
 #### Environment Variables
 The library looks for and validates the following environment variables:
 
-`ANVIL_POSTHOG_KEY`: PostHog API key (must start with 'phc_')
-`ANVIL_SENTRY_DSN`: Sentry DSN (must be a valid Sentry URL)
+`POSTHOG_KEY`: PostHog API key (must start with 'phc_')
+`SENTRY_DSN`: Sentry DSN (must be a valid Sentry URL)
 
 Example:
 ```bash
 # Valid PostHog key starting with 'phc_'
-export ANVIL_POSTHOG_KEY="phc_your_actual_posthog_key"
+export POSTHOG_KEY="phc_your_actual_posthog_key"
 # Valid Sentry DSN URL
-export ANVIL_SENTRY_DSN="https://your_key@sentry.io/your_project"
+export SENTRY_DSN="https://your_key@sentry.io/your_project"
 ./your-application
 ```
 
