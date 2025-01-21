@@ -19,7 +19,7 @@ impl TelemetryKeys {
 
     /// Retrieves PostHog API key from environment
     fn get_posthog_key() -> TelemetryResult<Option<String>> {
-        match std::env::var("ANVIL_POSTHOG_KEY") {
+        match std::env::var("POSTHOG_KEY") {
             Ok(key) if !key.trim().is_empty() => {
                 if !key.starts_with("phc_") {
                     return Err(TelemetryError::ConfigError(
@@ -34,7 +34,7 @@ impl TelemetryKeys {
 
     /// Retrieves Sentry DSN from environment
     fn get_sentry_dsn() -> TelemetryResult<Option<String>> {
-        match std::env::var("ANVIL_SENTRY_DSN") {
+        match std::env::var("SENTRY_DSN") {
             Ok(dsn) if !dsn.trim().is_empty() => {
                 // Basic Sentry DSN validation
                 if !dsn.starts_with("http") || !dsn.contains("@sentry.io") {
@@ -107,8 +107,8 @@ mod tests {
     #[test]
     fn test_env_vars() {
         unsafe {
-            std::env::set_var("ANVIL_POSTHOG_KEY", "phc_testkey123");
-            std::env::set_var("ANVIL_SENTRY_DSN", "https://test@sentry.io/123");
+            std::env::set_var("POSTHOG_KEY", "phc_testkey123");
+            std::env::set_var("SENTRY_DSN", "https://test@sentry.io/123");
         }
         
         let keys = TelemetryKeys::new().unwrap();
