@@ -188,4 +188,23 @@ mod tests {
         // No events should be captured because telemetry is disabled by default in tests
         assert_eq!(events.len(), 0);
     }
+
+    #[test]
+    fn test_posthog_error_capture() {
+        let (_, config_path) = setup();
+        
+        let telemetry = Telemetry::new(
+            "test-app",
+            Some("fake-key".to_string()),
+            None,
+            Some(config_path.into()),
+        ).unwrap();
+
+        assert!(telemetry.track_error(
+            &std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "test error"
+            )
+        ).is_ok());
+    }
 }
