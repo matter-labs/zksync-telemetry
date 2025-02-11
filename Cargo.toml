@@ -1,13 +1,13 @@
 [package]
 name = "zksync-telemetry"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 anyhow = "1.0.94"
 chrono = { version = "0.4.38", features = ["serde"] }
 directories = "5.0.1"
-posthog-rs = "0.2.2"
+posthog-rs = { git = "https://github.com/Romsters/posthog-rs", rev = "28ae51115c625008f092d63e355f89f5c455d4e4" }
 sentry = {version = "0.35.0", features = ["test"]}
 serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.133"

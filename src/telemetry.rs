@@ -1,4 +1,4 @@
-use posthog_rs::{client, Client as PostHogClient, Event};
+use posthog_rs::{client, Client as PostHogClient, ClientOptions as PostHogClientOptions, Event, Exception, EventBase};
 use sentry;
 use std::collections::HashMap;
 use crate::{TelemetryConfig, TelemetryError, TelemetryResult};
@@ -20,7 +20,9 @@ impl Telemetry {
 
         let (posthog, sentry_guard) = if config.enabled {
             let posthog = if let Some(key) = posthog_key {
-                Some(client(key.as_str()))
+                Some(client(PostHogClientOptions::new(key.as_str(), Some(&config.instance_id), sentry_dsn.is_none(), Some(|panic_exception| {
+                    let _ = Telemetry::add_default_props(panic_exception);
+                }))))
             } else {
                 None
             };
@@ -78,13 +80,7 @@ impl Telemetry {
                 event.insert_prop(key, value)
                     .map_err(|e| TelemetryError::SendError(e.to_string()))?;
             }
-
-            // Add default properties
-            event.insert_prop("platform", std::env::consts::OS)
-                .map_err(|e| TelemetryError::SendError(e.to_string()))?;
-            
-            event.insert_prop("version", env!("CARGO_PKG_VERSION"))
-                .map_err(|e| TelemetryError::SendError(e.to_string()))?;
+            Telemetry::add_default_props(&mut event)?;
 
             client.capture(event)
                 .map_err(|e| TelemetryError::SendError(e.to_string()))?;
@@ -100,7 +96,24 @@ impl Telemetry {
 
         if self.sentry_guard.is_some() {
             sentry::capture_error(error);
+        } else if let Some(posthog_client) = &self.posthog {
+            let mut exception = Exception::new(error, &self.config.instance_id);
+            Telemetry::add_default_props(&mut exception)?;
+
+            posthog_client.capture_exception(exception)
+                .map_err(|e| TelemetryError::SendError(e.to_string()))?;
         }
+
+        Ok(())
+    }
+
+    fn add_default_props(event: &mut impl EventBase) -> TelemetryResult<()> {
+        // Add default properties
+        event.insert_prop("platform", std::env::consts::OS)
+            .map_err(|e| TelemetryError::SendError(e.to_string()))?;
+
+        event.insert_prop("version", env!("CARGO_PKG_VERSION"))
+            .map_err(|e| TelemetryError::SendError(e.to_string()))?;
 
         Ok(())
     }
