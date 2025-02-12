@@ -950,7 +950,7 @@ checksum = "953ec861398dccce10c670dfeaf3ec4911ca479e9c02154b3a215178c5f566f2"
 [[package]]
 name = "posthog-rs"
 version = "0.2.6"
-source = "git+https://github.com/Romsters/posthog-rs?rev=28ae51115c625008f092d63e355f89f5c455d4e4#28ae51115c625008f092d63e355f89f5c455d4e4"
+source = "git+https://github.com/Romsters/posthog-rs?rev=8b228083d0c8d44826024882a47b02b70ca94229#8b228083d0c8d44826024882a47b02b70ca94229"
 dependencies = [
  "chrono",
  "os_info",

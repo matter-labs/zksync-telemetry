@@ -12,17 +12,26 @@ pub struct Telemetry {
 impl Telemetry {
     pub fn new(
         app_name: &str,
+        app_version: &str,
         posthog_key: Option<String>,
         sentry_dsn: Option<String>,
         custom_config_path: Option<std::path::PathBuf>,
     ) -> TelemetryResult<Self> {
-        let config = TelemetryConfig::new(app_name, custom_config_path)?;
+        let config = TelemetryConfig::new(app_name, app_version, custom_config_path)?;
 
         let (posthog, sentry_guard) = if config.enabled {
             let posthog = if let Some(key) = posthog_key {
-                Some(client(PostHogClientOptions::new(key.as_str(), Some(&config.instance_id), sentry_dsn.is_none(), Some(|panic_exception| {
-                    let _ = Telemetry::add_default_props(panic_exception);
-                }))))
+                let app = app_name.to_string();
+                let version = app_version.to_string();
+                let client_options = PostHogClientOptions::new(
+                    key.as_str(),
+                    Some(&config.instance_id),
+                    sentry_dsn.is_none(),
+                    Some(move |panic_exception: &mut Exception| {
+                        let _ = Telemetry::add_posthog_default_props(panic_exception, &app, &version);
+                    }),
+                );
+                Some(client(client_options))
             } else {
                 None
             };
@@ -39,8 +48,9 @@ impl Telemetry {
                 // Configure scope with default tags
                 sentry::configure_scope(|scope| {
                     scope.set_tag("app", app_name);
-                    scope.set_tag("version", env!("CARGO_PKG_VERSION"));
+                    scope.set_tag("app_version", app_version);
                     scope.set_tag("platform", std::env::consts::OS);
+                    scope.set_tag("zksync_telemetry_version", env!("CARGO_PKG_VERSION"));
                 });
 
                 Some(guard)
@@ -80,7 +90,7 @@ impl Telemetry {
                 event.insert_prop(key, value)
                     .map_err(|e| TelemetryError::SendError(e.to_string()))?;
             }
-            Telemetry::add_default_props(&mut event)?;
+            Telemetry::add_posthog_default_props(&mut event, &self.config.app_name, &self.config.app_version)?;
 
             client.capture(event)
                 .map_err(|e| TelemetryError::SendError(e.to_string()))?;
@@ -98,7 +108,7 @@ impl Telemetry {
             sentry::capture_error(error);
         } else if let Some(posthog_client) = &self.posthog {
             let mut exception = Exception::new(error, &self.config.instance_id);
-            Telemetry::add_default_props(&mut exception)?;
+            Telemetry::add_posthog_default_props(&mut exception, &self.config.app_name, &self.config.app_version)?;
 
             posthog_client.capture_exception(exception)
                 .map_err(|e| TelemetryError::SendError(e.to_string()))?;
@@ -107,12 +117,14 @@ impl Telemetry {
         Ok(())
     }
 
-    fn add_default_props(event: &mut impl EventBase) -> TelemetryResult<()> {
-        // Add default properties
+    fn add_posthog_default_props(event: &mut impl EventBase, app_name: &str, app_version: &str) -> TelemetryResult<()> {
+        event.insert_prop("app", app_name)
+            .map_err(|e| TelemetryError::SendError(e.to_string()))?;
+        event.insert_prop("app_version", app_version)
+            .map_err(|e| TelemetryError::SendError(e.to_string()))?;
         event.insert_prop("platform", std::env::consts::OS)
             .map_err(|e| TelemetryError::SendError(e.to_string()))?;
-
-        event.insert_prop("version", env!("CARGO_PKG_VERSION"))
+        event.insert_prop("zksync_telemetry_version", env!("CARGO_PKG_VERSION"))
             .map_err(|e| TelemetryError::SendError(e.to_string()))?;
 
         Ok(())
@@ -138,6 +150,7 @@ mod tests {
         
         let telemetry = Telemetry::new(
             "test-app",
+            "1.0.0",
             Some("fake-key".to_string()),
             Some("fake-dsn".to_string()),
             Some(config_path.into()),
@@ -152,6 +165,7 @@ mod tests {
         
         let telemetry = Telemetry::new(
             "test-app",
+            "1.0.0",
             None,
             None,
             Some(config_path.into()),
@@ -172,6 +186,7 @@ mod tests {
         
         let telemetry = Telemetry::new(
             "test-app",
+            "1.0.0",
             None,
             Some("https://public@example.com/1".to_string()),
             Some(config_path.into()),
@@ -195,6 +210,7 @@ mod tests {
         
         let telemetry = Telemetry::new(
             "test-app",
+            "1.0.0",
             Some("fake-key".to_string()),
             None,
             Some(config_path.into()),
