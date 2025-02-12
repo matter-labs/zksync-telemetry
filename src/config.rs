@@ -10,10 +10,6 @@ pub struct TelemetryConfig {
     pub enabled: bool,
     /// Unique instance ID
     pub instance_id: String,
-    /// App name
-    pub app_name: String,
-    /// App version
-    pub app_version: String,
     /// Timestamp of when config was created
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// Optional custom config path
@@ -22,11 +18,7 @@ pub struct TelemetryConfig {
 
 impl TelemetryConfig {
     /// Creates a new config instance
-    pub fn new(
-        app_name: &str,
-        app_version: &str,
-        custom_path: Option<PathBuf>,
-    ) -> TelemetryResult<Self> {
+    pub fn new(app_name: &str, custom_path: Option<PathBuf>) -> TelemetryResult<Self> {
         let config_path = Self::get_config_path(app_name, custom_path.clone());
 
         // If config file exists, load it
@@ -45,8 +37,6 @@ impl TelemetryConfig {
             return Ok(Self {
                 enabled: false,
                 instance_id: uuid::Uuid::new_v4().to_string(),
-                app_name: app_name.into(),
-                app_version: app_version.into(),
                 created_at: chrono::Utc::now(),
                 config_path: Some(config_path),
             });
@@ -69,8 +59,6 @@ impl TelemetryConfig {
         let config = Self {
             enabled,
             instance_id: uuid::Uuid::new_v4().to_string(),
-            app_name: app_name.into(),
-            app_version: app_version.into(),
             created_at: chrono::Utc::now(),
             config_path: Some(config_path.clone()),
         };
@@ -139,7 +127,7 @@ mod tests {
     #[test]
     fn test_config_creation() {
         let (_temp_dir, config_path) = setup();
-        let config = TelemetryConfig::new("test-app", "1.0.0", Some(config_path.clone())).unwrap();
+        let config = TelemetryConfig::new("test-app", Some(config_path.clone())).unwrap();
         assert!(!config.enabled); // Should be disabled in tests
     }
 
@@ -148,15 +136,14 @@ mod tests {
         let (_temp_dir, config_path) = setup();
 
         // Create config with default settings
-        let mut config =
-            TelemetryConfig::new("test-app", "1.0.0", Some(config_path.clone())).unwrap();
+        let mut config = TelemetryConfig::new("test-app", Some(config_path.clone())).unwrap();
 
         // Update consent
         config.update_consent(true).unwrap();
         assert!(config.enabled);
 
         // Verify persistence by loading config again
-        let loaded_config = TelemetryConfig::new("test-app", "1.0.0", Some(config_path)).unwrap();
+        let loaded_config = TelemetryConfig::new("test-app", Some(config_path)).unwrap();
         assert!(loaded_config.enabled);
     }
 }

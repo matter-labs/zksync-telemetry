@@ -7,6 +7,8 @@ use sentry;
 use std::collections::HashMap;
 
 pub struct Telemetry {
+    app_name: String,
+    app_version: String,
     config: TelemetryConfig,
     posthog: Option<PostHogClient>,
     sentry_guard: Option<sentry::ClientInitGuard>,
@@ -20,7 +22,7 @@ impl Telemetry {
         sentry_dsn: Option<String>,
         custom_config_path: Option<std::path::PathBuf>,
     ) -> TelemetryResult<Self> {
-        let config = TelemetryConfig::new(app_name, app_version, custom_config_path)?;
+        let config = TelemetryConfig::new(app_name, custom_config_path)?;
 
         let (posthog, sentry_guard) = if config.enabled {
             let posthog = if let Some(key) = posthog_key {
@@ -68,6 +70,8 @@ impl Telemetry {
         };
 
         Ok(Self {
+            app_name: app_name.to_string(),
+            app_version: app_version.to_string(),
             config,
             posthog,
             sentry_guard,
@@ -92,11 +96,7 @@ impl Telemetry {
                     .insert_prop(key, value)
                     .map_err(|e| TelemetryError::SendError(e.to_string()))?;
             }
-            Telemetry::add_posthog_default_props(
-                &mut event,
-                &self.config.app_name,
-                &self.config.app_version,
-            )?;
+            Telemetry::add_posthog_default_props(&mut event, &self.app_name, &self.app_version)?;
 
             client
                 .capture(event)
@@ -117,8 +117,8 @@ impl Telemetry {
             let mut exception = Exception::new(error, &self.config.instance_id);
             Telemetry::add_posthog_default_props(
                 &mut exception,
-                &self.config.app_name,
-                &self.config.app_version,
+                &self.app_name,
+                &self.app_version,
             )?;
 
             posthog_client
