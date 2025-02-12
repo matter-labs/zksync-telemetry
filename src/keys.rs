@@ -23,12 +23,12 @@ impl TelemetryKeys {
             Ok(key) if !key.trim().is_empty() => {
                 if !key.starts_with("phc_") {
                     return Err(TelemetryError::ConfigError(
-                        "Invalid PostHog key format. Must start with 'phc_'".to_string()
+                        "Invalid PostHog key format. Must start with 'phc_'".to_string(),
                     ));
                 }
                 Ok(Some(key))
             }
-            _ => Ok(None)
+            _ => Ok(None),
         }
     }
 
@@ -39,25 +39,25 @@ impl TelemetryKeys {
                 // Basic Sentry DSN validation
                 if !dsn.starts_with("http") || !dsn.contains("@sentry.io") {
                     return Err(TelemetryError::ConfigError(
-                        "Invalid Sentry DSN format".to_string()
+                        "Invalid Sentry DSN format".to_string(),
                     ));
                 }
                 Ok(Some(dsn))
             }
-            _ => Ok(None)
+            _ => Ok(None),
         }
     }
 
     /// Creates an instance with custom keys
     pub fn with_keys(
         posthog_key: Option<String>,
-        sentry_dsn: Option<String>
+        sentry_dsn: Option<String>,
     ) -> TelemetryResult<Self> {
         // Validate PostHog key if provided
         if let Some(key) = &posthog_key {
             if !key.starts_with("phc_") {
                 return Err(TelemetryError::ConfigError(
-                    "Invalid PostHog key format. Must start with 'phc_'".to_string()
+                    "Invalid PostHog key format. Must start with 'phc_'".to_string(),
                 ));
             }
         }
@@ -66,7 +66,7 @@ impl TelemetryKeys {
         if let Some(dsn) = &sentry_dsn {
             if !dsn.starts_with("http") || !dsn.contains("@sentry.io") {
                 return Err(TelemetryError::ConfigError(
-                    "Invalid Sentry DSN format".to_string()
+                    "Invalid Sentry DSN format".to_string(),
                 ));
             }
         }
@@ -77,7 +77,6 @@ impl TelemetryKeys {
         })
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -91,16 +90,10 @@ mod tests {
         );
         assert!(valid_keys.is_ok());
 
-        let invalid_posthog = TelemetryKeys::with_keys(
-            Some("invalid_key".to_string()),
-            None,
-        );
+        let invalid_posthog = TelemetryKeys::with_keys(Some("invalid_key".to_string()), None);
         assert!(invalid_posthog.is_err());
 
-        let invalid_sentry = TelemetryKeys::with_keys(
-            None,
-            Some("invalid_dsn".to_string()),
-        );
+        let invalid_sentry = TelemetryKeys::with_keys(None, Some("invalid_dsn".to_string()));
         assert!(invalid_sentry.is_err());
     }
 
@@ -110,7 +103,7 @@ mod tests {
             std::env::set_var("POSTHOG_KEY", "phc_testkey123");
             std::env::set_var("SENTRY_DSN", "https://test@sentry.io/123");
         }
-        
+
         let keys = TelemetryKeys::new().unwrap();
         assert_eq!(keys.posthog_key.unwrap(), "phc_testkey123");
         assert_eq!(keys.sentry_dsn.unwrap(), "https://test@sentry.io/123");

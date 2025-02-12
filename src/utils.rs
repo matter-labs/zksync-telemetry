@@ -5,18 +5,16 @@ pub(crate) fn is_interactive() -> bool {
         return false;
     }
 
-    std::io::stdin().is_terminal() && 
-    std::io::stdout().is_terminal() &&
-    !is_ci_environment()
+    std::io::stdin().is_terminal() && std::io::stdout().is_terminal() && !is_ci_environment()
 }
 
 pub(crate) fn is_ci_environment() -> bool {
-    std::env::var("CI").is_ok() ||
-    std::env::var("CONTINUOUS_INTEGRATION").is_ok() ||
-    std::env::var("BUILD_NUMBER").is_ok() ||
-    std::env::var("GITHUB_ACTIONS").is_ok() ||
-    std::env::var("TEAMCITY_VERSION").is_ok() ||
-    std::env::var("TRAVIS").is_ok()
+    std::env::var("CI").is_ok()
+        || std::env::var("CONTINUOUS_INTEGRATION").is_ok()
+        || std::env::var("BUILD_NUMBER").is_ok()
+        || std::env::var("GITHUB_ACTIONS").is_ok()
+        || std::env::var("TEAMCITY_VERSION").is_ok()
+        || std::env::var("TRAVIS").is_ok()
 }
 
 pub(crate) fn prompt_yes_no(prompt: &str) -> bool {

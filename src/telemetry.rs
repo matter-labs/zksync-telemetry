@@ -1,7 +1,10 @@
-use posthog_rs::{client, Client as PostHogClient, ClientOptions as PostHogClientOptions, Event, Exception, EventBase};
+use crate::{TelemetryConfig, TelemetryError, TelemetryResult};
+use posthog_rs::{
+    client, Client as PostHogClient, ClientOptions as PostHogClientOptions, Event, EventBase,
+    Exception,
+};
 use sentry;
 use std::collections::HashMap;
-use crate::{TelemetryConfig, TelemetryError, TelemetryResult};
 
 pub struct Telemetry {
     config: TelemetryConfig,
@@ -28,7 +31,8 @@ impl Telemetry {
                     Some(&config.instance_id),
                     sentry_dsn.is_none(),
                     Some(move |panic_exception: &mut Exception| {
-                        let _ = Telemetry::add_posthog_default_props(panic_exception, &app, &version);
+                        let _ =
+                            Telemetry::add_posthog_default_props(panic_exception, &app, &version);
                     }),
                 );
                 Some(client(client_options))
@@ -41,7 +45,7 @@ impl Telemetry {
                     release: Some(env!("CARGO_PKG_VERSION").into()),
                     ..Default::default()
                 };
-                
+
                 // Initialize Sentry and store the guard
                 let guard = sentry::init((dsn, options));
 
@@ -80,19 +84,22 @@ impl Telemetry {
         }
 
         if let Some(client) = &self.posthog {
-            let mut event = Event::new(
-                event_name, 
-                &self.config.instance_id
-            );
+            let mut event = Event::new(event_name, &self.config.instance_id);
 
             // Add all properties
             for (key, value) in properties {
-                event.insert_prop(key, value)
+                event
+                    .insert_prop(key, value)
                     .map_err(|e| TelemetryError::SendError(e.to_string()))?;
             }
-            Telemetry::add_posthog_default_props(&mut event, &self.config.app_name, &self.config.app_version)?;
+            Telemetry::add_posthog_default_props(
+                &mut event,
+                &self.config.app_name,
+                &self.config.app_version,
+            )?;
 
-            client.capture(event)
+            client
+                .capture(event)
                 .map_err(|e| TelemetryError::SendError(e.to_string()))?;
         }
 
@@ -108,23 +115,36 @@ impl Telemetry {
             sentry::capture_error(error);
         } else if let Some(posthog_client) = &self.posthog {
             let mut exception = Exception::new(error, &self.config.instance_id);
-            Telemetry::add_posthog_default_props(&mut exception, &self.config.app_name, &self.config.app_version)?;
+            Telemetry::add_posthog_default_props(
+                &mut exception,
+                &self.config.app_name,
+                &self.config.app_version,
+            )?;
 
-            posthog_client.capture_exception(exception)
+            posthog_client
+                .capture_exception(exception)
                 .map_err(|e| TelemetryError::SendError(e.to_string()))?;
         }
 
         Ok(())
     }
 
-    fn add_posthog_default_props(event: &mut impl EventBase, app_name: &str, app_version: &str) -> TelemetryResult<()> {
-        event.insert_prop("app", app_name)
+    fn add_posthog_default_props(
+        event: &mut impl EventBase,
+        app_name: &str,
+        app_version: &str,
+    ) -> TelemetryResult<()> {
+        event
+            .insert_prop("app", app_name)
             .map_err(|e| TelemetryError::SendError(e.to_string()))?;
-        event.insert_prop("app_version", app_version)
+        event
+            .insert_prop("app_version", app_version)
             .map_err(|e| TelemetryError::SendError(e.to_string()))?;
-        event.insert_prop("platform", std::env::consts::OS)
+        event
+            .insert_prop("platform", std::env::consts::OS)
             .map_err(|e| TelemetryError::SendError(e.to_string()))?;
-        event.insert_prop("zksync_telemetry_version", env!("CARGO_PKG_VERSION"))
+        event
+            .insert_prop("zksync_telemetry_version", env!("CARGO_PKG_VERSION"))
             .map_err(|e| TelemetryError::SendError(e.to_string()))?;
 
         Ok(())
@@ -147,14 +167,15 @@ mod tests {
     #[test]
     fn test_telemetry_disabled_by_default_in_tests() {
         let (_, config_path) = setup();
-        
+
         let telemetry = Telemetry::new(
             "test-app",
             "1.0.0",
             Some("fake-key".to_string()),
             Some("fake-dsn".to_string()),
             Some(config_path.into()),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert!(!telemetry.config.enabled);
     }
@@ -162,14 +183,9 @@ mod tests {
     #[test]
     fn test_track_event_when_disabled() {
         let (_, config_path) = setup();
-        
-        let telemetry = Telemetry::new(
-            "test-app",
-            "1.0.0",
-            None,
-            None,
-            Some(config_path.into()),
-        ).unwrap();
+
+        let telemetry =
+            Telemetry::new("test-app", "1.0.0", None, None, Some(config_path.into())).unwrap();
 
         let mut properties = HashMap::new();
         properties.insert(
@@ -183,20 +199,18 @@ mod tests {
     #[test]
     fn test_sentry_error_capture() {
         let (_, config_path) = setup();
-        
+
         let telemetry = Telemetry::new(
             "test-app",
             "1.0.0",
             None,
             Some("https://public@example.com/1".to_string()),
             Some(config_path.into()),
-        ).unwrap();
+        )
+        .unwrap();
 
         let events = sentry::test::with_captured_events(|| {
-            let error = std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "test error"
-            );
+            let error = std::io::Error::new(std::io::ErrorKind::Other, "test error");
             telemetry.track_error(&error).unwrap();
         });
 
@@ -207,20 +221,21 @@ mod tests {
     #[test]
     fn test_posthog_error_capture() {
         let (_, config_path) = setup();
-        
+
         let telemetry = Telemetry::new(
             "test-app",
             "1.0.0",
             Some("fake-key".to_string()),
             None,
             Some(config_path.into()),
-        ).unwrap();
+        )
+        .unwrap();
 
-        assert!(telemetry.track_error(
-            &std::io::Error::new(
+        assert!(telemetry
+            .track_error(&std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "test error"
-            )
-        ).is_ok());
+            ))
+            .is_ok());
     }
 }
