@@ -18,11 +18,12 @@ impl Telemetry {
     pub fn new(
         app_name: &str,
         app_version: &str,
+        config_name: &str,
         posthog_key: Option<String>,
         sentry_dsn: Option<String>,
         custom_config_path: Option<std::path::PathBuf>,
     ) -> TelemetryResult<Self> {
-        let config = TelemetryConfig::new(app_name, custom_config_path)?;
+        let config = TelemetryConfig::new(config_name, custom_config_path)?;
 
         let (posthog, sentry_guard) = if config.enabled {
             let posthog = if let Some(key) = posthog_key {
@@ -171,6 +172,7 @@ mod tests {
         let telemetry = Telemetry::new(
             "test-app",
             "1.0.0",
+            "zksync-telemetry",
             Some("fake-key".to_string()),
             Some("fake-dsn".to_string()),
             Some(config_path.into()),
@@ -184,8 +186,15 @@ mod tests {
     fn test_track_event_when_disabled() {
         let (_, config_path) = setup();
 
-        let telemetry =
-            Telemetry::new("test-app", "1.0.0", None, None, Some(config_path.into())).unwrap();
+        let telemetry = Telemetry::new(
+            "test-app",
+            "1.0.0",
+            "zksync-telemetry",
+            None,
+            None,
+            Some(config_path.into()),
+        )
+        .unwrap();
 
         let mut properties = HashMap::new();
         properties.insert(
@@ -203,6 +212,7 @@ mod tests {
         let telemetry = Telemetry::new(
             "test-app",
             "1.0.0",
+            "zksync-telemetry",
             None,
             Some("https://public@example.com/1".to_string()),
             Some(config_path.into()),
@@ -225,6 +235,7 @@ mod tests {
         let telemetry = Telemetry::new(
             "test-app",
             "1.0.0",
+            "zksync-telemetry",
             Some("fake-key".to_string()),
             None,
             Some(config_path.into()),

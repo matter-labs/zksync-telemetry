@@ -18,8 +18,8 @@ pub struct TelemetryConfig {
 
 impl TelemetryConfig {
     /// Creates a new config instance
-    pub fn new(app_name: &str, custom_path: Option<PathBuf>) -> TelemetryResult<Self> {
-        let config_path = Self::get_config_path(app_name, custom_path.clone());
+    pub fn new(config_name: &str, custom_path: Option<PathBuf>) -> TelemetryResult<Self> {
+        let config_path = Self::get_config_path(config_name, custom_path.clone());
 
         // If config file exists, load it
         if config_path.exists() {
@@ -81,11 +81,11 @@ impl TelemetryConfig {
     }
 
     /// Gets the configuration file path
-    pub fn get_config_path(app_name: &str, custom_path: Option<PathBuf>) -> PathBuf {
+    pub fn get_config_path(config_name: &str, custom_path: Option<PathBuf>) -> PathBuf {
         if let Some(path) = custom_path {
             path
         } else {
-            let proj_dirs = directories::ProjectDirs::from("com", "matter-labs", app_name)
+            let proj_dirs = directories::ProjectDirs::from("com", "matter-labs", config_name)
                 .expect("Failed to get project directories");
             proj_dirs.config_dir().join("telemetry.json")
         }
