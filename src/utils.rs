@@ -20,7 +20,7 @@ pub(crate) fn is_ci_environment() -> bool {
 pub(crate) fn prompt_yes_no(prompt: &str) -> bool {
     println!("{} (y/n)", prompt);
     let mut input = String::new();
-    if let Ok(_) = std::io::stdin().read_line(&mut input) {
+    if std::io::stdin().read_line(&mut input).is_ok() {
         input.trim().to_lowercase().starts_with('y')
     } else {
         false
