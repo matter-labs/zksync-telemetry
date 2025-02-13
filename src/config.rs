@@ -18,16 +18,18 @@ pub struct TelemetryConfig {
 
 impl TelemetryConfig {
     /// Creates a new config instance
-    pub fn new(app_name: &str, custom_path: Option<PathBuf>) -> TelemetryResult<Self> {
-        let config_path = Self::get_config_path(app_name, custom_path.clone());
+    pub fn new(config_name: &str, custom_path: Option<PathBuf>) -> TelemetryResult<Self> {
+        let config_path = Self::get_config_path(config_name, custom_path.clone());
 
         // If config file exists, load it
         if config_path.exists() {
-            let file = std::fs::File::open(&config_path)
-                .map_err(|e| TelemetryError::ConfigError(format!("Failed to open config file: {}", e)))?;
-            
-            return serde_json::from_reader(file)
-                .map_err(|e| TelemetryError::ConfigError(format!("Failed to parse config: {}", e)));
+            let file = std::fs::File::open(&config_path).map_err(|e| {
+                TelemetryError::ConfigError(format!("Failed to open config file: {}", e))
+            })?;
+
+            return serde_json::from_reader(file).map_err(|e| {
+                TelemetryError::ConfigError(format!("Failed to parse config: {}", e))
+            });
         }
 
         // If we're not in interactive mode, disable telemetry
@@ -51,7 +53,7 @@ impl TelemetryConfig {
         println!("  - Personal information");
         println!("  - Sensitive configuration");
         println!("  - Private keys or addresses");
-        
+
         let enabled = prompt_yes_no("Would you like to enable telemetry?");
 
         let config = Self {
@@ -63,13 +65,15 @@ impl TelemetryConfig {
 
         // Save the config
         if let Some(parent) = config_path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| TelemetryError::ConfigError(format!("Failed to create config directory: {}", e)))?;
+            std::fs::create_dir_all(parent).map_err(|e| {
+                TelemetryError::ConfigError(format!("Failed to create config directory: {}", e))
+            })?;
         }
 
-        let file = std::fs::File::create(&config_path)
-            .map_err(|e| TelemetryError::ConfigError(format!("Failed to create config file: {}", e)))?;
-        
+        let file = std::fs::File::create(&config_path).map_err(|e| {
+            TelemetryError::ConfigError(format!("Failed to create config file: {}", e))
+        })?;
+
         serde_json::to_writer_pretty(file, &config)
             .map_err(|e| TelemetryError::ConfigError(format!("Failed to write config: {}", e)))?;
 
@@ -77,11 +81,11 @@ impl TelemetryConfig {
     }
 
     /// Gets the configuration file path
-    pub fn get_config_path(app_name: &str, custom_path: Option<PathBuf>) -> PathBuf {
+    pub fn get_config_path(config_name: &str, custom_path: Option<PathBuf>) -> PathBuf {
         if let Some(path) = custom_path {
             path
         } else {
-            let proj_dirs = directories::ProjectDirs::from("com", "matter-labs", app_name)
+            let proj_dirs = directories::ProjectDirs::from("com", "matter-labs", config_name)
                 .expect("Failed to get project directories");
             proj_dirs.config_dir().join("telemetry.json")
         }
@@ -93,15 +97,13 @@ impl TelemetryConfig {
 
         // Only save if we have a config path
         if let Some(path) = &self.config_path {
-            let file = std::fs::File::create(path)
-                .map_err(|e| TelemetryError::ConfigError(
-                    format!("Failed to update telemetry consent: {}", e)
-                ))?;
-            
-            serde_json::to_writer_pretty(file, self)
-                .map_err(|e| TelemetryError::ConfigError(
-                    format!("Failed to save telemetry consent: {}", e)
-                ))?;
+            let file = std::fs::File::create(path).map_err(|e| {
+                TelemetryError::ConfigError(format!("Failed to update telemetry consent: {}", e))
+            })?;
+
+            serde_json::to_writer_pretty(file, self).map_err(|e| {
+                TelemetryError::ConfigError(format!("Failed to save telemetry consent: {}", e))
+            })?;
         }
 
         Ok(())
@@ -132,10 +134,10 @@ mod tests {
     #[test]
     fn test_update_consent() {
         let (_temp_dir, config_path) = setup();
-        
+
         // Create config with default settings
         let mut config = TelemetryConfig::new("test-app", Some(config_path.clone())).unwrap();
-        
+
         // Update consent
         config.update_consent(true).unwrap();
         assert!(config.enabled);

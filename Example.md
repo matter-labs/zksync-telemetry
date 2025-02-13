@@ -21,6 +21,8 @@ impl AnvilNode {
         // Initialize telemetry
         let telemetry = Telemetry::new(
             "anvil-node",
+            "1.0.0",
+            "zksync-telemetry",
             Some(std::env::var("POSTHOG_API_KEY")
                 .unwrap_or_else(|_| "your-posthog-key".to_string())),
             Some(std::env::var("SENTRY_DSN")

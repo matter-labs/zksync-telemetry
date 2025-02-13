@@ -32,6 +32,8 @@ use std::error::Error;
 fn initialize_telemetry() -> Result<Telemetry, Box<dyn Error>> {
     let telemetry = Telemetry::new(
         "your-cli-name",                     // Name of your CLI application
+        "1.0.0",                             // Version of your CLI application
+        "config-name",                       // Used for config file location and analytics grouping
         Some("your-posthog-key".to_string()),// PostHog API key
         Some("your-sentry-dsn".to_string()), // Sentry DSN
         None,                                // Use default config path
@@ -42,7 +44,9 @@ fn initialize_telemetry() -> Result<Telemetry, Box<dyn Error>> {
 ```
 
 #### Configuration Options Explained:
-- `app_name`: Used for config file location and analytics grouping
+- `app_name`: App or service name reported with every event
+- `app_version`: App or service version reported with every event
+- `config_name`: Used for config file location and analytics grouping
 - `posthog_key`: Your PostHog API key (optional)
 - `sentry_dsn`: Your Sentry DSN (optional)
 - `custom_config_path`: Override default config location (optional)
@@ -97,6 +101,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Initialize telemetry
     let telemetry = Telemetry::new(
         "my-cli-app",
+        "1.0.0",
+        "config-name",
         Some("ph_key".to_string()),
         Some("sentry_dsn".to_string()),
         None,
@@ -159,14 +165,15 @@ The library provides flexible management of PostHog and Sentry API keys through 
 use zksync_telemetry::{Telemetry, TelemetryKeys};
 
 fn main() {
-    // TelemetryKeys::new() now returns Result
     let keys = TelemetryKeys::new()
         .expect("Failed to initialize telemetry keys");
         
     let telemetry = Telemetry::new(
         "your-app-name",
-        keys.posthog_key,    // Now Option<String>
-        keys.sentry_dsn,     // Now Option<String>
+        "1.0.0",
+        "config-name",
+        keys.posthog_key,
+        keys.sentry_dsn,
         None,
     ).expect("Failed to initialize telemetry");
 }
