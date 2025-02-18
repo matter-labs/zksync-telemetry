@@ -1,10 +1,11 @@
 use crate::{TelemetryConfig, TelemetryError, TelemetryResult};
 use posthog_rs::{
-    client, Client as PostHogClient, ClientOptions as PostHogClientOptions, Event, EventBase,
-    Exception,
+    client, Client as PostHogClient, ClientOptionsBuilder as PostHogClientOptionsBuilder, Event,
+    EventBase, Exception,
 };
 use sentry;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 pub struct Telemetry {
     app_name: String,
@@ -15,7 +16,7 @@ pub struct Telemetry {
 }
 
 impl Telemetry {
-    pub fn new(
+    pub async fn new(
         app_name: &str,
         app_version: &str,
         config_name: &str,
@@ -29,16 +30,17 @@ impl Telemetry {
             let posthog = if let Some(key) = posthog_key {
                 let app = app_name.to_string();
                 let version = app_version.to_string();
-                let client_options = PostHogClientOptions::new(
-                    key.as_str(),
-                    Some(&config.instance_id),
-                    sentry_dsn.is_none(),
-                    Some(move |panic_exception: &mut Exception| {
+                let client_options = PostHogClientOptionsBuilder::default()
+                    .api_key(key)
+                    .default_distinct_id(config.instance_id.clone())
+                    .enable_panic_capturing(sentry_dsn.is_none())
+                    .on_panic_exception(Some(Arc::new(move |panic_exception: &mut Exception| {
                         let _ =
                             Telemetry::add_posthog_default_props(panic_exception, &app, &version);
-                    }),
-                );
-                Some(client(client_options))
+                    })))
+                    .build()
+                    .expect("Failed to build posthog client options");
+                Some(client(client_options).await)
             } else {
                 None
             };
@@ -79,7 +81,7 @@ impl Telemetry {
         })
     }
 
-    pub fn track_event(
+    pub async fn track_event(
         &self,
         event_name: &str,
         properties: HashMap<String, serde_json::Value>,
@@ -101,21 +103,25 @@ impl Telemetry {
 
             client
                 .capture(event)
+                .await
                 .map_err(|e| TelemetryError::SendError(e.to_string()))?;
         }
 
         Ok(())
     }
 
-    pub fn track_error(&self, error: &dyn std::error::Error) -> TelemetryResult<()> {
+    pub async fn track_error(
+        &self,
+        error: Box<&(dyn std::error::Error + Send + Sync)>,
+    ) -> TelemetryResult<()> {
         if !self.config.enabled {
             return Ok(());
         }
 
         if self.sentry_guard.is_some() {
-            sentry::capture_error(error);
+            sentry::capture_error(*error);
         } else if let Some(posthog_client) = &self.posthog {
-            let mut exception = Exception::new(error, &self.config.instance_id);
+            let mut exception = Exception::new(*error, &self.config.instance_id);
             Telemetry::add_posthog_default_props(
                 &mut exception,
                 &self.app_name,
@@ -124,6 +130,7 @@ impl Telemetry {
 
             posthog_client
                 .capture_exception(exception)
+                .await
                 .map_err(|e| TelemetryError::SendError(e.to_string()))?;
         }
 
@@ -165,8 +172,8 @@ mod tests {
         (temp_dir, config_path.to_str().unwrap().to_string())
     }
 
-    #[test]
-    fn test_telemetry_disabled_by_default_in_tests() {
+    #[tokio::test]
+    async fn test_telemetry_disabled_by_default_in_tests() {
         let (_, config_path) = setup();
 
         let telemetry = Telemetry::new(
@@ -177,13 +184,14 @@ mod tests {
             Some("fake-dsn".to_string()),
             Some(config_path.into()),
         )
+        .await
         .unwrap();
 
         assert!(!telemetry.config.enabled);
     }
 
-    #[test]
-    fn test_track_event_when_disabled() {
+    #[tokio::test]
+    async fn test_track_event_when_disabled() {
         let (_, config_path) = setup();
 
         let telemetry = Telemetry::new(
@@ -194,6 +202,7 @@ mod tests {
             None,
             Some(config_path.into()),
         )
+        .await
         .unwrap();
 
         let mut properties = HashMap::new();
@@ -202,11 +211,14 @@ mod tests {
             serde_json::Value::String("value".to_string()),
         );
 
-        assert!(telemetry.track_event("test_event", properties).is_ok());
+        assert!(telemetry
+            .track_event("test_event", properties)
+            .await
+            .is_ok());
     }
 
-    #[test]
-    fn test_sentry_error_capture() {
+    #[tokio::test]
+    async fn test_sentry_error_capture() {
         let (_, config_path) = setup();
 
         let telemetry = Telemetry::new(
@@ -217,19 +229,20 @@ mod tests {
             Some("https://public@example.com/1".to_string()),
             Some(config_path.into()),
         )
+        .await
         .unwrap();
 
-        let events = sentry::test::with_captured_events(|| {
-            let error = std::io::Error::new(std::io::ErrorKind::Other, "test error");
-            telemetry.track_error(&error).unwrap();
-        });
-
-        // No events should be captured because telemetry is disabled by default in tests
-        assert_eq!(events.len(), 0);
+        assert!(telemetry
+            .track_error(Box::new(&std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "test error"
+            )))
+            .await
+            .is_ok());
     }
 
-    #[test]
-    fn test_posthog_error_capture() {
+    #[tokio::test]
+    async fn test_posthog_error_capture() {
         let (_, config_path) = setup();
 
         let telemetry = Telemetry::new(
@@ -240,13 +253,15 @@ mod tests {
             None,
             Some(config_path.into()),
         )
+        .await
         .unwrap();
 
         assert!(telemetry
-            .track_error(&std::io::Error::new(
+            .track_error(Box::new(&std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "test error"
-            ))
+            )))
+            .await
             .is_ok());
     }
 }

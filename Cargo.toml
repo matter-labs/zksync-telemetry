@@ -7,7 +7,7 @@ edition = "2021"
 anyhow = "1.0.94"
 chrono = { version = "0.4.38", features = ["serde"] }
 directories = "5.0.1"
-posthog-rs = { git = "https://github.com/Romsters/posthog-rs", rev = "8b228083d0c8d44826024882a47b02b70ca94229" }
+posthog-rs = { git = "https://github.com/Romsters/posthog-rs", rev = "a54b1423100beaaa5d7eb43ff801f4b8389f9550", features = ["async-client"] }
 sentry = {version = "0.35.0", features = ["test"]}
 serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.133"
@@ -16,3 +16,4 @@ uuid = { version = "1.11.0", features = ["v4", "serde"] }
 
 [dev-dependencies]
 tempfile = "3.14.0"
+tokio = { version = "1.43.0", features = ["full"] }
