@@ -1,11 +1,11 @@
-use crate::{TelemetryConfig, TelemetryError, TelemetryResult, TelemetryProps};
+use crate::{TelemetryConfig, TelemetryError, TelemetryProps, TelemetryResult};
+use once_cell::sync::OnceCell;
 use posthog_rs::{
     client, Client as PostHogClient, ClientOptionsBuilder as PostHogClientOptionsBuilder, Event,
     EventBase, Exception,
 };
 use sentry;
 use std::sync::Arc;
-use once_cell::sync::OnceCell;
 
 pub struct Telemetry {
     app_name: String,
@@ -161,7 +161,7 @@ impl Telemetry {
 
     // No need for explicit shutdown now as the guard handles it
 }
- 
+
 static TELEMETRY: OnceCell<Telemetry> = OnceCell::new();
 
 pub async fn init_telemetry(
@@ -172,8 +172,18 @@ pub async fn init_telemetry(
     sentry_dsn: Option<String>,
     custom_config_path: Option<std::path::PathBuf>,
 ) -> anyhow::Result<()> {
-    let telemetry = Telemetry::new(app_name, app_version, config_name, posthog_key, sentry_dsn, custom_config_path).await?;
-    TELEMETRY.set(telemetry).map_err(|_| anyhow::format_err!("Telemetry is already set"))
+    let telemetry = Telemetry::new(
+        app_name,
+        app_version,
+        config_name,
+        posthog_key,
+        sentry_dsn,
+        custom_config_path,
+    )
+    .await?;
+    TELEMETRY
+        .set(telemetry)
+        .map_err(|_| anyhow::format_err!("Telemetry is already set"))
 }
 
 pub fn get_telemetry() -> Option<&'static Telemetry> {
@@ -224,11 +234,7 @@ mod tests {
         .await
         .unwrap();
 
-        let properties = TelemetryProps::new()
-            .insert(
-                "test",
-                Some("value"),
-            ).take();
+        let properties = TelemetryProps::new().insert("test", Some("value")).take();
 
         assert!(telemetry
             .track_event("test_event", properties)
@@ -299,8 +305,9 @@ mod tests {
             Some("fake-dsn".to_string()),
             Some(config_path.into()),
         )
-        .await.unwrap();
-        
+        .await
+        .unwrap();
+
         telemetry = get_telemetry();
 
         assert!(telemetry.is_some());

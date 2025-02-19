@@ -10,4 +10,4 @@ pub use config::TelemetryConfig;
 pub use error::{TelemetryError, TelemetryResult};
 pub use keys::TelemetryKeys;
 pub use properties::TelemetryProps;
-pub use telemetry::{Telemetry, init_telemetry, get_telemetry};
+pub use telemetry::{get_telemetry, init_telemetry, Telemetry};
