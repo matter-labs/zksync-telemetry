@@ -20,7 +20,7 @@ A comprehensive telemetry solution for zkSync CLI applications that combines Pos
 Add the library to your `Cargo.toml`:
 ```toml
 [dependencies]
-zksync-telemetry = "0.1.0"
+zksync_telemetry = "0.1.0"
 ```
 
 ### 2. Initialize Telemetry
@@ -54,20 +54,11 @@ fn initialize_telemetry() -> Result<Telemetry, Box<dyn Error>> {
 ### 3. Track Events
 
 ```rust
-use std::collections::HashMap;
-
 fn track_cli_usage(telemetry: &Telemetry, command: &str) -> Result<(), Box<dyn Error>> {
-    let mut properties = HashMap::new();
-    
-    // Add event properties
-    properties.insert(
-        "command".to_string(),
-        serde_json::Value::String(command.to_string()),
-    );
-    properties.insert(
-        "os".to_string(),
-        serde_json::Value::String(std::env::consts::OS.to_string()),
-    );
+    let properties = TelemetryProps::new()
+        .insert("command", Some(command))
+        .insert("os", Some(std::env::consts::OS.to_string()))
+        .take();
 
     // Track the event
     telemetry.track_event("command_executed", properties)?;
@@ -109,11 +100,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
 
     // Use throughout your application
-    let mut properties = HashMap::new();
-    properties.insert(
-        "action".to_string(),
-        serde_json::Value::String("start".to_string()),
-    );
+    let properties = TelemetryProps::new()
+        .insert("action", Some("start"))
+        .take();
 
     // Track application start
     telemetry.track_event("app_start", properties)?;
@@ -121,11 +110,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Your application logic here
     match do_something_important() {
         Ok(_) => {
-            let mut success_props = HashMap::new();
-            success_props.insert(
-                "status".to_string(),
-                serde_json::Value::String("success".to_string()),
-            );
+            let success_props = TelemetryProps::new()
+                .insert("status", Some("success"))
+                .take();
             telemetry.track_event("operation_complete", success_props)?;
         }
         Err(e) => {

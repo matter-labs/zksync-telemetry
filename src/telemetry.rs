@@ -1,11 +1,11 @@
-use crate::{TelemetryConfig, TelemetryError, TelemetryResult};
+use crate::{TelemetryConfig, TelemetryError, TelemetryResult, TelemetryProps};
 use posthog_rs::{
     client, Client as PostHogClient, ClientOptionsBuilder as PostHogClientOptionsBuilder, Event,
     EventBase, Exception,
 };
 use sentry;
-use std::collections::HashMap;
 use std::sync::Arc;
+use once_cell::sync::OnceCell;
 
 pub struct Telemetry {
     app_name: String,
@@ -84,7 +84,7 @@ impl Telemetry {
     pub async fn track_event(
         &self,
         event_name: &str,
-        properties: HashMap<String, serde_json::Value>,
+        properties: TelemetryProps,
     ) -> TelemetryResult<()> {
         if !self.config.enabled {
             return Ok(());
@@ -93,11 +93,12 @@ impl Telemetry {
         if let Some(client) = &self.posthog {
             let mut event = Event::new(event_name, &self.config.instance_id);
 
-            // Add all properties
-            for (key, value) in properties {
-                event
-                    .insert_prop(key, value)
-                    .map_err(|e| TelemetryError::SendError(e.to_string()))?;
+            if let Some(props_map) = properties.to_map() {
+                for (key, value) in props_map {
+                    event
+                        .insert_prop(key, value)
+                        .map_err(|e| TelemetryError::SendError(e.to_string()))?;
+                }
             }
             Telemetry::add_posthog_default_props(&mut event, &self.app_name, &self.app_version)?;
 
@@ -160,6 +161,24 @@ impl Telemetry {
 
     // No need for explicit shutdown now as the guard handles it
 }
+ 
+static TELEMETRY: OnceCell<Telemetry> = OnceCell::new();
+
+pub async fn init_telemetry(
+    app_name: &str,
+    app_version: &str,
+    config_name: &str,
+    posthog_key: Option<String>,
+    sentry_dsn: Option<String>,
+    custom_config_path: Option<std::path::PathBuf>,
+) -> anyhow::Result<()> {
+    let telemetry = Telemetry::new(app_name, app_version, config_name, posthog_key, sentry_dsn, custom_config_path).await?;
+    TELEMETRY.set(telemetry).map_err(|_| anyhow::format_err!("Telemetry is already set"))
+}
+
+pub fn get_telemetry() -> Option<&'static Telemetry> {
+    TELEMETRY.get()
+}
 
 #[cfg(test)]
 mod tests {
@@ -205,11 +224,11 @@ mod tests {
         .await
         .unwrap();
 
-        let mut properties = HashMap::new();
-        properties.insert(
-            "test".to_string(),
-            serde_json::Value::String("value".to_string()),
-        );
+        let properties = TelemetryProps::new()
+            .insert(
+                "test",
+                Some("value"),
+            ).take();
 
         assert!(telemetry
             .track_event("test_event", properties)
@@ -263,5 +282,27 @@ mod tests {
             )))
             .await
             .is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_telemetry_init() {
+        let (_, config_path) = setup();
+
+        let mut telemetry = get_telemetry();
+        assert!(telemetry.is_none());
+
+        init_telemetry(
+            "test-app",
+            "1.0.0",
+            "zksync-telemetry",
+            Some("fake-key".to_string()),
+            Some("fake-dsn".to_string()),
+            Some(config_path.into()),
+        )
+        .await.unwrap();
+        
+        telemetry = get_telemetry();
+
+        assert!(telemetry.is_some());
     }
 }
