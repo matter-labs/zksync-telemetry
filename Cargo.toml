@@ -1,5 +1,5 @@
 [package]
-name = "zksync-telemetry"
+name = "zksync_telemetry"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,6 +7,7 @@ edition = "2021"
 anyhow = "1.0.94"
 chrono = { version = "0.4.38", features = ["serde"] }
 directories = "5.0.1"
+once_cell = "1.20.3"
 posthog-rs = { git = "https://github.com/Romsters/posthog-rs", rev = "a54b1423100beaaa5d7eb43ff801f4b8389f9550", features = ["async-client"] }
 sentry = {version = "0.35.0", features = ["test"]}
 serde = { version = "1.0.215", features = ["derive"] }
