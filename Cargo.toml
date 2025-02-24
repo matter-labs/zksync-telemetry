@@ -2,6 +2,11 @@
 name = "zksync_telemetry"
 version = "0.1.0"
 edition = "2021"
+authors = ["The Matter Labs Team <hello@matterlabs.dev>"]
+homepage = "https://zksync.io/"
+repository = "https://github.com/matter-labs/zksync-telemetry"
+license = "MIT OR Apache-2.0"
+keywords = ["zksync"]
 
 [dependencies]
 anyhow = "1.0.94"
