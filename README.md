@@ -20,7 +20,7 @@ A comprehensive telemetry solution for zkSync CLI applications that combines Pos
 Add the library to your `Cargo.toml`:
 ```toml
 [dependencies]
-zksync_telemetry = "0.1.0"
+zksync_telemetry = { git = "https://github.com/matter-labs/zksync-telemetry.git" }
 ```
 
 ### 2. Initialize Telemetry
