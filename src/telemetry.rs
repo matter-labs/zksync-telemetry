@@ -1,17 +1,17 @@
 use crate::{TelemetryConfig, TelemetryError, TelemetryProps, TelemetryResult};
 use once_cell::sync::OnceCell;
 use posthog_rs::{
-    client, Client as PostHogClient, ClientOptionsBuilder as PostHogClientOptionsBuilder, Event,
-    EventBase, Exception,
+    CaptureExceptionOptions, ClientOptionsBuilder as PostHogClientOptionsBuilder,
+    ErrorTrackingOptionsBuilder as PostHogErrorTrackingOptionsBuilder, Event,
 };
-use sentry;
-use std::sync::Arc;
 
 pub struct Telemetry {
-    app_name: String,
-    app_version: String,
     config: TelemetryConfig,
-    posthog: Option<PostHogClient>,
+    /// Whether the process-wide PostHog client was initialised for this instance.
+    ///
+    /// `posthog-rs` keeps a single global client per process: it is the only client that can
+    /// capture panics, and telemetry is a process-wide singleton anyway (see [`init_telemetry`]).
+    posthog: bool,
     sentry_guard: Option<sentry::ClientInitGuard>,
 }
 
@@ -28,21 +28,11 @@ impl Telemetry {
 
         let (posthog, sentry_guard) = if config.enabled {
             let posthog = if let Some(key) = posthog_key {
-                let app = app_name.to_string();
-                let version = app_version.to_string();
-                let client_options = PostHogClientOptionsBuilder::default()
-                    .api_key(key)
-                    .default_distinct_id(config.instance_id.clone())
-                    .enable_panic_capturing(sentry_dsn.is_none())
-                    .on_panic_exception(Some(Arc::new(move |panic_exception: &mut Exception| {
-                        let _ =
-                            Telemetry::add_posthog_default_props(panic_exception, &app, &version);
-                    })))
-                    .build()
-                    .expect("Failed to build posthog client options");
-                Some(client(client_options).await)
+                // Panics go to Sentry when it is configured, otherwise to PostHog.
+                Telemetry::init_posthog(key, app_name, app_version, sentry_dsn.is_none()).await?;
+                true
             } else {
-                None
+                false
             };
 
             let sentry_guard = if let Some(dsn) = sentry_dsn {
@@ -69,16 +59,49 @@ impl Telemetry {
 
             (posthog, sentry_guard)
         } else {
-            (None, None)
+            (false, None)
         };
 
         Ok(Self {
-            app_name: app_name.to_string(),
-            app_version: app_version.to_string(),
             config,
             posthog,
             sentry_guard,
         })
+    }
+
+    /// Initialises the global PostHog client.
+    ///
+    /// A client that is already initialised (e.g. by another [`Telemetry`] instance in the same
+    /// process) is reused as is.
+    async fn init_posthog(
+        api_key: String,
+        app_name: &str,
+        app_version: &str,
+        capture_panics: bool,
+    ) -> TelemetryResult<()> {
+        let error_tracking = PostHogErrorTrackingOptionsBuilder::default()
+            .capture_panics(capture_panics)
+            .build()
+            .map_err(|e| TelemetryError::InitializationError(e.to_string()))?;
+
+        let app = app_name.to_string();
+        let version = app_version.to_string();
+        let client_options = PostHogClientOptionsBuilder::default()
+            .api_key(api_key)
+            .error_tracking(error_tracking)
+            // Attach the default properties to every event in one place: this also covers the
+            // `$exception` events produced by the panic hook, which are not built by this crate.
+            .before_send(move |mut event: Event| {
+                Telemetry::add_posthog_default_props(&mut event, &app, &version);
+                Some(event)
+            })
+            .build()
+            .map_err(|e| TelemetryError::InitializationError(e.to_string()))?;
+
+        match posthog_rs::init_global(client_options).await {
+            Ok(()) | Err(posthog_rs::Error::AlreadyInitialized) => Ok(()),
+            Err(e) => Err(TelemetryError::InitializationError(e.to_string())),
+        }
     }
 
     pub async fn track_event(
@@ -90,8 +113,8 @@ impl Telemetry {
             return Ok(());
         }
 
-        if let Some(client) = &self.posthog {
-            let mut event = Event::new(event_name, &self.config.instance_id);
+        if self.posthog {
+            let mut event = Event::new(event_name, self.config.instance_id.as_str());
 
             if let Some(props_map) = properties.to_map() {
                 for (key, value) in props_map {
@@ -100,12 +123,11 @@ impl Telemetry {
                         .map_err(|e| TelemetryError::SendError(e.to_string()))?;
                 }
             }
-            Telemetry::add_posthog_default_props(&mut event, &self.app_name, &self.app_version)?;
 
-            client
-                .capture(event)
-                .await
-                .map_err(|e| TelemetryError::SendError(e.to_string()))?;
+            // `capture` only queues the event on a background worker; flush so that the event is
+            // actually delivered before returning, as CLI processes tend to exit right after.
+            posthog_rs::capture(event);
+            posthog_rs::flush().await;
         }
 
         Ok(())
@@ -121,42 +143,24 @@ impl Telemetry {
 
         if self.sentry_guard.is_some() {
             sentry::capture_error(*error);
-        } else if let Some(posthog_client) = &self.posthog {
-            let mut exception = Exception::new(*error, &self.config.instance_id);
-            Telemetry::add_posthog_default_props(
-                &mut exception,
-                &self.app_name,
-                &self.app_version,
-            )?;
-
-            posthog_client
-                .capture_exception(exception)
+        } else if self.posthog {
+            let options =
+                CaptureExceptionOptions::new().distinct_id(self.config.instance_id.as_str());
+            posthog_rs::capture_exception_with(*error, options)
                 .await
                 .map_err(|e| TelemetryError::SendError(e.to_string()))?;
+            posthog_rs::flush().await;
         }
 
         Ok(())
     }
 
-    fn add_posthog_default_props(
-        event: &mut impl EventBase,
-        app_name: &str,
-        app_version: &str,
-    ) -> TelemetryResult<()> {
-        event
-            .insert_prop("app", app_name)
-            .map_err(|e| TelemetryError::SendError(e.to_string()))?;
-        event
-            .insert_prop("app_version", app_version)
-            .map_err(|e| TelemetryError::SendError(e.to_string()))?;
-        event
-            .insert_prop("platform", std::env::consts::OS)
-            .map_err(|e| TelemetryError::SendError(e.to_string()))?;
-        event
-            .insert_prop("zksync_telemetry_version", env!("CARGO_PKG_VERSION"))
-            .map_err(|e| TelemetryError::SendError(e.to_string()))?;
-
-        Ok(())
+    fn add_posthog_default_props(event: &mut Event, app_name: &str, app_version: &str) {
+        // Only serialization of the value can fail here, and these are plain strings.
+        let _ = event.insert_prop("app", app_name);
+        let _ = event.insert_prop("app_version", app_version);
+        let _ = event.insert_prop("platform", std::env::consts::OS);
+        let _ = event.insert_prop("zksync_telemetry_version", env!("CARGO_PKG_VERSION"));
     }
 
     // No need for explicit shutdown now as the guard handles it
